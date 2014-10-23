@@ -1,7 +1,7 @@
 #Packet sniffer in python
 #For Linux
  
-import socket, sys
+import socket, sys, time
 from struct import *
  
 #create an INET, raw socket
@@ -50,7 +50,8 @@ Choice one of the following options:
             eth_header = packet[:eth_length]
             eth = unpack('!6s6sH' , eth_header)
             eth_protocol = socket.ntohs(eth[2])
-            print 'Destination MAC.....: ' + eth_addr(packet[0:6]) + '\nSource MAC..........: ' + eth_addr(packet[6:12]) + '\nProtocol............: ' + str(eth_protocol)
+            pakket = ' DMAC:' + eth_addr(packet[0:6]) + ' SMAC:' + eth_addr(packet[6:12]) + ' P:' + str(eth_protocol)
+            #print 'Destination MAC.....: ' + eth_addr(packet[0:6]) + '\nSource MAC..........: ' + eth_addr(packet[6:12]) + '\nProtocol............: ' + str(eth_protocol)
   
             #Parse IP packets, IP Protocol number = 8
             if eth_protocol == 8 :
@@ -72,7 +73,8 @@ Choice one of the following options:
                 s_addr = socket.inet_ntoa(iph[8]);
                 d_addr = socket.inet_ntoa(iph[9]);
  
-                print '\nVersion.............: ' + str(version) + '\nIP Header Length....: ' + str(ihl) + '\nTTL.................: ' + str(ttl) + '\nProtocol............: ' + str(protocol) + '\nSource Address......: ' + str(s_addr) + '\nDestination Address.: ' + str(d_addr)
+                pakket += 'V: ' + str(version) + 'IPHL: ' + str(ihl) + 'TTL: ' + str(ttl) + 'P: ' + str(protocol) + 'Sadd: ' + str(s_addr) + 'Dadd: ' + str(d_addr)
+                print 
  
                 #TCP protocol
                 if protocol == 6 :
@@ -88,8 +90,8 @@ Choice one of the following options:
                     acknowledgement = tcph[3]
                     doff_reserved = tcph[4]
                     tcph_length = doff_reserved >> 4
-             
-                    print 'Source Port.........: ' + str(source_port) + '\nDest Port...........: ' + str(dest_port) + '\nSequence Number.....: ' + str(sequence) + '\nAcknowledgement.....: ' + str(acknowledgement) + '\nTCP header length...: ' + str(tcph_length)
+                    pakket += 'SPort:' + str(source_port) + 'DPort:' + str(dest_port) + 'Seq: ' + str(sequence) + 'Ack: ' + str(acknowledgement) + 'TCPhead: ' + str(tcph_length)
+                    #print 'Source Port.........: ' + str(source_port) + '\nDest Port...........: ' + str(dest_port) + '\nSequence Number.....: ' + str(sequence) + '\nAcknowledgement.....: ' + str(acknowledgement) + '\nTCP header length...: ' + str(tcph_length)
              
                     h_size = eth_length + iph_length + tcph_length * 4
                     data_size = len(packet) - h_size
@@ -97,7 +99,7 @@ Choice one of the following options:
                     #get data from the packet
                     data = packet[h_size:]
              
-                    print 'Data : ' + data
+                    #print 'Data : ' + data
  
                 #ICMP Packets
                 elif protocol == 1 :
@@ -111,8 +113,8 @@ Choice one of the following options:
                     icmp_type = icmph[0]
                     code = icmph[1]
                     checksum = icmph[2]
-             
-                    print 'Type : ' + str(icmp_type) + ' Code : ' + str(code) + ' Checksum : ' + str(checksum)
+                    
+                    pakket += 'Type : ' + str(icmp_type) + ' Code : ' + str(code) + ' Checksum : ' + str(checksum)
              
                     h_size = eth_length + iph_length + icmph_length
                     data_size = len(packet) - h_size
@@ -120,7 +122,7 @@ Choice one of the following options:
                     #get data from the packet
                     data = packet[h_size:]
              
-                    print 'Data : ' + data
+                    #print 'Data : ' + data
  
                 #UDP packets
                 elif protocol == 17 :
@@ -135,14 +137,15 @@ Choice one of the following options:
                     dest_port = udph[1]
                     length = udph[2]
                     checksum = udph[3]
-            
-                    print 'Source Port.........: ' + str(source_port) + '\nDest Port...........: ' + str(dest_port) + '\nLength..............: ' + str(length) + '\nChecksum............: ' + str(checksum)
+                    
+                    pakket += 'SPort:' + str(source_port) + ' DPort:' + str(dest_port) + ' Len:' + str(length) + ' Chk: ' + str(checksum)
+                    #print 'Source Port.........: ' + str(source_port) + '\nDest Port...........: ' + str(dest_port) + '\nLength..............: ' + str(length) + '\nChecksum............: ' + str(checksum)
              
                     h_size = eth_length + iph_length + udph_length
                     data_size = len(packet) - h_size
              
                     #get data from the packet
-                    data = packet[h_size:]
+                    #data = packet[h_size:]
              
                     #print 'Data : ' + data
  
@@ -150,7 +153,14 @@ Choice one of the following options:
                 else :
                     print 'Protocol other than TCP/UDP/ICMP'
              
-                print '_______________________________________'
+                #print '_______________________________________'
+
+                # om loops tegen te gaan
+                # nu dport volgens mij straks sport
+                if dest_port != 12345:
+                     print pakket
+
+
     elif ans=="2":
         print ("""
 #Thank you for using the Unix sniffer
