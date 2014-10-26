@@ -1,84 +1,74 @@
-#Packet sniffer in python
-#For Linux
- 
-import socket
-from struct import * 
+#!/usr/bin/python           # This is server.py file
 
-s = socket.socket()
-host = socket.gethostname()
-port = 12345
-s.bind((host, port))
+import socket               # Import socket module
+from struct import *
+import sys
+import time
 
-s.listen(5)
+s = socket.socket()         # Create a socket object
+host = socket.gethostname() # Get local machine name
+port = 12345                # Reserve a port for your service.
+s.bind((host, port))        # Bind to the port
+
+s.listen(5)                 # Now wait for client connection.
 while True:
-    c, addr = s.accept()
-    print '########################################'
-    print '#                                      #'
-    print '#     Welcome to the Unix sniffer      #'
-    print '#                                      #'
-    print '########################################\n'
-    print '#Got connection from', addr,' \n'
-    c.send('You are succesfully connected\n')
-    c.close
+    c, addr = s.accept()     # Establish connection with client.
+    print 'Got connection from', addr
+
     try:
         sniff = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_TCP)
     except socket.error , msg:
         print 'Socket could not be created. Error Code : ' + str(msg[0]) + ' Message ' + msg[1]
-        sys.exit()
-     
+        sys.exit()     
     # receive a packet
     while True:
+        pakket = ''
         packet = sniff.recvfrom(65565)
-         
-        #packet string from tuple
+             
+            #packet string from tuple
         packet = packet[0]
-         
-        #take first 20 characters for the ip header
+             
+            #take first 20 characters for the ip header
         ip_header = packet[0:20]
-         
-        #now unpack them :)
+             
+            #now unpack them :)
         iph = unpack('!BBHHHBBH4s4s' , ip_header)
-         
+            
         version_ihl = iph[0]
         version = version_ihl >> 4
         ihl = version_ihl & 0xF
-         
+             
         iph_length = ihl * 4
-         
+            
         ttl = iph[5]
         protocol = iph[6]
         s_addr = socket.inet_ntoa(iph[8]);
         d_addr = socket.inet_ntoa(iph[9]);
-         
+             
         pakket = 'Version : ' + str(version) + ' IP Header Length : ' + str(ihl) + ' TTL : ' + str(ttl) + ' Protocol : ' + str(protocol) + ' Source Address : ' + str(s_addr) + ' Destination Address : ' + str(d_addr)
-         
+             
         tcp_header = packet[iph_length:iph_length+20]
-         
-        #now unpack them :)
+             
+            #now unpack them :)
         tcph = unpack('!HHLLBBHHH' , tcp_header)
-         
+           
         source_port = tcph[0]
         dest_port = tcph[1]
         sequence = tcph[2]
         acknowledgement = tcph[3]
         doff_reserved = tcph[4]
         tcph_length = doff_reserved >> 4
-         
+             
         pakket += 'Source Port : ' + str(source_port) + ' Dest Port : ' + str(dest_port) + ' Sequence Number : ' + str(sequence) + ' Acknowledgement : ' + str(acknowledgement) + ' TCP header length : ' + str(tcph_length)
-         
+             
         h_size = iph_length + tcph_length * 4
         data_size = len(packet) - h_size
-         
-        #get data from the packet
+             
+            #get data from the packet
         data = packet[h_size:]
-
-        print pakket
         
-    
-################Server connection##################
 
-
-    
-#create an INET, raw socket
-
-
+        c.send(pakket)
+        c.close
+        
+         
