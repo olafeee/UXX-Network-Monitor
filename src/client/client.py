@@ -5,14 +5,7 @@ import socket, sys, time
 from struct import *
  
 #create an INET, raw socket
-s = socket.socket()
-host = socket.gethostname()
-port = 12345
 
-s.connect((host, port))
-
-print s.recv(1024)
-###########################Connection to server###########################
 
 ans=True
 while ans:
@@ -40,7 +33,7 @@ Choice one of the following options:
         #Recive a packet
         while True:
             packet = tcp.recvfrom(65565)
-     
+            print packet
             #packet string from tuple
             packet = packet[0]
     
@@ -157,8 +150,9 @@ Choice one of the following options:
 
                 # om loops tegen te gaan
                 # nu dport volgens mij straks sport
-                if dest_port != 12345:
-                     print pakket
+                print tcph[1]
+                #if dest_port != 12345:
+                     #print pakket
 
 
     elif ans=="2":

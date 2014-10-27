@@ -1,11 +1,9 @@
 import time
 
-a = []
+
 i = 1
 while True:
-	[i] + a 
-	a = range(5)
-	i+1
-	print(a)
+	print(i)
+	i+=1
 	time.sleep(2)
 

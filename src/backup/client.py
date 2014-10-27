@@ -10,7 +10,11 @@ host = socket.gethostname()
 port = 12345
 
 s.connect((host, port))
+s.settimeout(1000)
 
-print s.recv(1024)
-
-###########################Connection to server###########################
+while True:
+	data  = s.recv(1024)
+	if not data: 
+		print "geen data"
+		break
+	print data
