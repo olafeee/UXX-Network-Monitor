@@ -1,22 +1,20 @@
-#!/usr/bin/python           # This is client.py file
-
-import socket               # Import socket module
-
-s = socket.socket()         # Create a socket object
-host = socket.gethostname() # Get local machine name
-port = 12345                # Reserve a port for your service.
+#Packet sniffer in python
+#For Linux
+ 
+import socket, sys
+from struct import *
+ 
+#create an INET, raw socket
+s = socket.socket()
+host = socket.gethostname()
+port = 12345
 
 s.connect((host, port))
 s.settimeout(1000)
 
-<<<<<<< HEAD
 while True:
 	data  = s.recv(1024)
 	if not data: 
 		print "geen data"
 		break
 	print data
-=======
-print s.recv(1024)
-s.close()     
->>>>>>> FETCH_HEAD
