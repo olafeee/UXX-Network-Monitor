@@ -14,7 +14,7 @@ class Database():
 
 	# start connection and cursor
 	def connect(self):
-		self.conn = pymysql.connect(host='127.0.0.1',port=3306 , user='pyPDS', passwd='henkjan', db='PDS')
+		self.conn = pymysql.connect(host='127.0.0.1',port=3306 , user='root', passwd='henkjan', db='unix')
 		self.cur = self.conn.cursor()
 
 	#close cursor and connection
@@ -22,19 +22,13 @@ class Database():
 		self.cur.close()
 		self.conn.close()
 
-	# one function for selecting things out of db
-	# @ stmnt = sql statement
-	# @ arg = when blabla is used in statement
-	def getInfo(self, stmnt, arg = None):
-		if arg == None:
-			self.cur.execute(stmnt)
-		else:
-			self.cur.execute(stmnt, arg)
+	def insertPacket(self, Dest_mac, Source_mac, eth_protocol):
+		InsertStmt = "INSERT INTO ETH(Dest_mac,Source_mac,Protocol) VALUES (%s, %s, %s)"
+		try:
+			self.cur.execute(UpdateStmt, (Dest_mac, Source_mac, eth_protocol))
+			self.conn.commit()
+			result = True
+		except:
+			result = False
 
-		return self.cur.fetchall()
-		
-
-		print("y is", y)#mag weg
-		self.cur.execute(UpdateDomain_count, (x+y, dateLog))
-		self.conn.commit()
-		return True
+		return result

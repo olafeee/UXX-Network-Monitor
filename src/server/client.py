@@ -15,7 +15,7 @@ def client():
   while True:
     if not kill_received:
       response = sock.recv(1024)
-      print "Received: {}".format(response)
+      print "{}".format(response)
     else:
       sock.close()
       break

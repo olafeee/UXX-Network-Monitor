@@ -4,13 +4,14 @@ import socket
 import threading
 import SocketServer
 from struct import *
-import MySQLdb
 
 import curses
 import time
 import random
 import sys
 import linecache
+from database import Database
+
 
 pakketArray = []
 kill_received = True
@@ -73,149 +74,170 @@ class ThreadedTCPServer(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
 def stopServer():
   kill_received = True
 
+################################################
+#                Packet collector              #
+################################################
+
 def collect(server):
   global kill_received
   global pakketArray
-  while not kill_received:
-    #Convert a string of 6 characters of ethernet address into a dash separated hex string
-    def eth_addr (a) :
-      b = "%.2x:%.2x:%.2x:%.2x:%.2x:%.2x" % (ord(a[0]) , ord(a[1]) , ord(a[2]), ord(a[3]), ord(a[4]) , ord(a[5]))
-      return b
+  db = Database()
+  db.toggleconnect()
+  while True:
+    if not kill_received:
+      #Convert a string of 6 characters of ethernet address into a dash separated hex string
+      def eth_addr (a) :
+        b = "%.2x:%.2x:%.2x:%.2x:%.2x:%.2x" % (ord(a[0]) , ord(a[1]) , ord(a[2]), ord(a[3]), ord(a[4]) , ord(a[5]))
+        return b
 
-    #create a AF_PACKET type raw socket (thats basically packet level)
-    #define ETH_P_ALL    0x0003          /* Every packet (be careful!!!) */
-    try:
-      tcp = socket.socket( socket.AF_PACKET , socket.SOCK_RAW , socket.ntohs(0x0003))
-    except socket.error , msg:
-      print 'Socket could not be created. Error Code : ' + str(msg[0]) + ' Message ' + msg[1]
-      sys.exit()
-
-    #Recive a packet
-    while True:
-      packet = tcp.recvfrom(65565)
-
-      #packet string from tuple
-      packet = packet[0]
-
-      #parse ethernet header
-      eth_length = 14
-
-      eth_header = packet[:eth_length]
-      eth = unpack('!6s6sH' , eth_header)
-      eth_protocol = socket.ntohs(eth[2])
-      pakket = ' DMAC:' + eth_addr(packet[0:6]) + ' SMAC:' + eth_addr(packet[6:12]) + ' P:' + str(eth_protocol)
-      #print 'Destination MAC.....: ' + eth_addr(packet[0:6]) + '\nSource MAC..........: ' + eth_addr(packet[6:12]) + '\nProtocol............: ' + str(eth_protocol)
-
-      #Parse IP packets, IP Protocol number = 8
-      if eth_protocol == 8 :
-        #Parse IP header
-        #take first 20 characters for the ip header
-        ip_header = packet[eth_length:20+eth_length]
-
-        #now unpack them :)
-        iph = unpack('!BBHHHBBH4s4s' , ip_header)
-
-        version_ihl = iph[0]
-        version = version_ihl >> 4
-        ihl = version_ihl & 0xF
-
-        iph_length = ihl * 4
-
-        ttl = iph[5]
-        protocol = iph[6]
-        s_addr = socket.inet_ntoa(iph[8]);
-        d_addr = socket.inet_ntoa(iph[9]);
-
-        pakket += 'V: ' + str(version) + 'IPHL: ' + str(ihl) + 'TTL: ' + str(ttl) + 'P: ' + str(protocol) + 'Sadd: ' + str(s_addr) + 'Dadd: ' + str(d_addr)
-        print 
-
-        #TCP protocol
-        if protocol == 6 :
-          t = iph_length + eth_length
-          tcp_header = packet[t:t+20]
-
-          #now unpack them :)
-          tcph = unpack('!HHLLBBHHH' , tcp_header)
-
-          source_port = tcph[0]
-          dest_port = tcph[1]
-          sequence = tcph[2]
-          acknowledgement = tcph[3]
-          doff_reserved = tcph[4]
-          tcph_length = doff_reserved >> 4
-          pakket += 'SPort:' + str(source_port) + 'DPort:' + str(dest_port) + 'Seq: ' + str(sequence) + 'Ack: ' + str(acknowledgement) + 'TCPhead: ' + str(tcph_length)
-          #print 'Source Port.........: ' + str(source_port) + '\nDest Port...........: ' + str(dest_port) + '\nSequence Number.....: ' + str(sequence) + '\nAcknowledgement.....: ' + str(acknowledgement) + '\nTCP header length...: ' + str(tcph_length)
-
-          h_size = eth_length + iph_length + tcph_length * 4
-          data_size = len(packet) - h_size
-
-          #get data from the packet
-          data = packet[h_size:]
-
-          #print 'Data : ' + data
-
-        #ICMP Packets
-        elif protocol == 1 :
-          u = iph_length + eth_length
-          icmph_length = 4
-          icmp_header = packet[u:u+4]
-
-          #now unpack them :)
-          icmph = unpack('!BBH' , icmp_header)
-
-          icmp_type = icmph[0]
-          code = icmph[1]
-          checksum = icmph[2]
-
-          pakket += 'Type : ' + str(icmp_type) + ' Code : ' + str(code) + ' Checksum : ' + str(checksum)
-
-          h_size = eth_length + iph_length + icmph_length
-          data_size = len(packet) - h_size
-
-          #get data from the packet
-          data = packet[h_size:]
-
-          #print 'Data : ' + data
-
-        #UDP packets
-        elif protocol == 17 :
-          u = iph_length + eth_length
-          udph_length = 8
-          udp_header = packet[u:u+8]
-
-          #now unpack them :)
-          udph = unpack('!HHHH' , udp_header)
-
-          source_port = udph[0]
-          dest_port = udph[1]
-          length = udph[2]
-          checksum = udph[3]
-
-          pakket += 'SPort:' + str(source_port) + ' DPort:' + str(dest_port) + ' Len:' + str(length) + ' Chk: ' + str(checksum)
-          #print 'Source Port.........: ' + str(source_port) + '\nDest Port...........: ' + str(dest_port) + '\nLength..............: ' + str(length) + '\nChecksum............: ' + str(checksum)
-
-          h_size = eth_length + iph_length + udph_length
-          data_size = len(packet) - h_size
-
-            #some other IP packet like IGMP
-        else :
-          print 'Protocol other than TCP/UDP/ICMP'
-
-        pakketArray.append(pakket)
-      
+      #create a AF_PACKET type raw socket (thats basically packet level)
+      #define ETH_P_ALL    0x0003          /* Every packet (be careful!!!) */
       try:
-        db = MySQLdb.connect("127.0.0.1","root","welkom","unix" )
-        sql = db.cursor()        # Prepare SQL query to INSERT a record into the database.
-        sql.execute("""INSERT INTO ETH(Dest_mac,Source_mac,Protocol)
-      VALUES (%s, %s, %s)""",(eth_addr(packet[0:6]),eth_addr(packet[6:12]),eth_protocol))
-        db.commit()
-      except MySQLdb.Error, e:
-        print "Error %d: %s" % (e.args[0],e.args[1])
-        sys.exit()   
-      finally:    
-        if db:    
-          db.close()
-    
+        tcp = socket.socket( socket.AF_PACKET , socket.SOCK_RAW , socket.ntohs(0x0003))
+      except socket.error , msg:
+        print 'Socket could not be created. Error Code : ' + str(msg[0]) + ' Message ' + msg[1]
+        sys.exit()
+
+      #Recive a packet
+      while True:
+        loopPrevent = False
+        packet = tcp.recvfrom(65565)
+
+        #packet string from tuple
+        packet = packet[0]
+
+        #parse ethernet header
+        eth_length = 14
+
+        eth_header = packet[:eth_length]
+        eth = unpack('!6s6sH' , eth_header)
+        eth_protocol = socket.ntohs(eth[2])
+        #pakket = ' DMAC:' + eth_addr(packet[0:6]) + ' SMAC:' + eth_addr(packet[6:12])
+        #+ ' P:' + str(eth_protocol)
+        #print 'Destination MAC.....: ' + eth_addr(packet[0:6]) + '\nSource MAC..........: ' + eth_addr(packet[6:12]) + '\nProtocol............: ' + str(eth_protocol)
+
+        #Parse IP packets, IP Protocol number = 8
+        if eth_protocol == 8 :
+          #Parse IP header
+          #take first 20 characters for the ip header
+          ip_header = packet[eth_length:20+eth_length]
+
+          #now unpack them :)
+          iph = unpack('!BBHHHBBH4s4s' , ip_header)
+
+          version_ihl = iph[0]
+          version = version_ihl >> 4
+          ihl = version_ihl & 0xF
+
+          iph_length = ihl * 4
+
+          ttl = iph[5]
+          protocol = iph[6]
+          s_addr = socket.inet_ntoa(iph[8]);
+          d_addr = socket.inet_ntoa(iph[9]);
+
+          #pakket += 'V: ' + str(version) + 'IPHL: ' + str(ihl) + 'TTL: ' + str(ttl) + 'P: ' + str(protocol) + 'Sadd: ' + str(s_addr) + 'Dadd: ' + str(d_addr)
+          if protocol == 6:
+            protocol_name = "TCP"
+          elif protocol == 1 :
+            protocol_name = "ICMP"
+          elif protocol == 17 :
+            protocol_name = "UDP"
+          else:
+            protocol_name = ""
+
+          pakket = 'IPv ' + str(version) + ' P: ' + str(protocol_name)
+
+          #TCP protocol
+          if protocol == 6 :
+            t = iph_length + eth_length
+            tcp_header = packet[t:t+20]
+
+            #now unpack them :)
+            tcph = unpack('!HHLLBBHHH' , tcp_header)
+
+            source_port = tcph[0]
+            dest_port = tcph[1]
+            sequence = tcph[2]
+            acknowledgement = tcph[3]
+            doff_reserved = tcph[4]
+            tcph_length = doff_reserved >> 4
+            #pakket += 'SPort:' + str(source_port) + 'DPort:' + str(dest_port) + 'Seq: ' + str(sequence) + 'Ack: ' + str(acknowledgement) + 'TCPhead: ' + str(tcph_length)
+            pakket += ' Source: ' + str(s_addr) + ':' + str(source_port) + ' Destination: '+ str(d_addr) + ':' + str(dest_port)
+            #print 'Source Port.........: ' + str(source_port) + '\nDest Port...........: ' + str(dest_port) + '\nSequence Number.....: ' + str(sequence) + '\nAcknowledgement.....: ' + str(acknowledgement) + '\nTCP header length...: ' + str(tcph_length)
+            if source_port == 12753:
+              loopPrevent = True
+            if dest_port == 12753:
+              loopPrevent = True
+
+            h_size = eth_length + iph_length + tcph_length * 4
+            data_size = len(packet) - h_size
+
+            #get data from the packet
+            data = packet[h_size:]
+
+            #print 'Data : ' + data
+
+          #ICMP Packets
+          elif protocol == 1 :
+            u = iph_length + eth_length
+            icmph_length = 4
+            icmp_header = packet[u:u+4]
+
+            #now unpack them :)
+            icmph = unpack('!BBH' , icmp_header)
+
+            icmp_type = icmph[0]
+            code = icmph[1]
+            checksum = icmph[2]
+            pakket += ' Source: ' + str(s_addr) + ' Destination: '+ str(d_addr) + 'Type : ' + str(icmp_type) + ' Checksum : ' + str(checksum)
+            #pakket += 'Type : ' + str(icmp_type) + ' Code : ' + str(code) + ' Checksum : ' + str(checksum)
+
+            h_size = eth_length + iph_length + icmph_length
+            data_size = len(packet) - h_size
+
+            #get data from the packet
+            data = packet[h_size:]
+
+            #print 'Data : ' + data
+
+          #UDP packets
+          elif protocol == 17 :
+            u = iph_length + eth_length
+            udph_length = 8
+            udp_header = packet[u:u+8]
+
+            #now unpack them :)
+            udph = unpack('!HHHH' , udp_header)
+
+            source_port = udph[0]
+            dest_port = udph[1]
+            length = udph[2]
+            checksum = udph[3]
+
+            #pakket += 'SPort:' + str(source_port) + ' DPort:' + str(dest_port) + ' Len:' + str(length) + ' Chk: ' + str(checksum)
+            pakket += ' Source: ' + str(s_addr) + ':' + str(source_port) + ' Destination: '+ str(d_addr) + ':' + str(dest_port)
+            #print 'Source Port.........: ' + str(source_port) + '\nDest Port...........: ' + str(dest_port) + '\nLength..............: ' + str(length) + '\nChecksum............: ' + str(checksum)
+
+            h_size = eth_length + iph_length + udph_length
+            data_size = len(packet) - h_size
+
+              #some other IP packet like IGMP
+          else :
+            print 'Protocol other than TCP/UDP/ICMP'
+
+          if not loopPrevent:
+            pakket += "\n"
+            pakketArray.append(pakket)
+            result = db.insertPacket(eth_addr(packet[0:6]), eth_addr(packet[6:12]), eth_protocol)
+            #if not result:
+            #  db.disconnect()
+            #  break            
+          
+    else:
+      db.disconnect()
+      break
+
 ################################################
 #                Interface                     #
 ################################################
@@ -235,7 +257,7 @@ def show_menu(win):
     win.clear()
     win.bkgd(curses.color_pair(2))
     win.box()
-    win.addstr(1, 2, "o:", curses.A_UNDERLINE)
+    win.addstr(1, 2, "S:", curses.A_UNDERLINE)
     win.addstr(1, 6, "Start")
     win.addstr(1, 20, "x:", curses.A_UNDERLINE)
     win.addstr(1, 24, "Exit")
@@ -247,8 +269,8 @@ def read_file(menu_win, file_win, st):
     showFooter(st)
     menu_win.clear()
     menu_win.box()
-    menu_win.addstr(1, 2, "x:", curses.A_UNDERLINE)
-    menu_win.addstr(1, 5, "Ende ->")
+    menu_win.addstr(1, 2, "X:", curses.A_UNDERLINE)
+    menu_win.addstr(1, 5, " Exit ->")
     menu_win.refresh()
     file_win.box()
     file_win.clear()
@@ -261,8 +283,8 @@ def read_file(menu_win, file_win, st):
       c = stdscr.getch()
       if c == ord('x'):
           kill_received = True
-          break
           sys.exit()
+          break 
     
 def fileWin(packets):
   global file_win
@@ -275,8 +297,6 @@ def fileWin(packets):
   file_win.addstr(2, 22, str(packetsCount), curses.A_UNDERLINE)
   file_win.addstr(3, 2, "Connections closed", curses.A_UNDERLINE)
   file_win.addstr(3, 22, str(sock_error), curses.A_UNDERLINE)
-  file_win.addstr(3, 2, "Connections openend", curses.A_UNDERLINE)
-  file_win.addstr(3, 22, str(sock_error), curses.A_UNDERLINE)
   file_win.refresh()
 
 def showFooter(st):
@@ -285,10 +305,14 @@ def showFooter(st):
     histo_win.box()
     histo_win.clear()
     histo_win.box()
-    histo_win.addstr(1, 2, "Packetsniffer v0.3.1.3.6.8", curses.A_UNDERLINE)
+    histo_win.addstr(1, 2, "Beta Packetsniffer v0.3.1.3.6.8", curses.A_UNDERLINE)
     histo_win.addstr(1, 30, str(st) , curses.A_UNDERLINE)
     histo_win.addstr(1, 33, str(gpc) , curses.A_UNDERLINE)
     histo_win.refresh() 
+
+################################################
+#                     Main                     #
+################################################
 
 if __name__ == "__main__":
 
@@ -307,8 +331,9 @@ if __name__ == "__main__":
     showFooter("s")
     c = stdscr.getch()
     if c == ord('x'):
+      sys.exit()
       break
-    elif c == ord('o'):
+    elif c == ord('s'):
       show_menu(mwin)
       kill_received = False
       #showFooter("o")
@@ -337,57 +362,3 @@ if __name__ == "__main__":
   stdscr.keypad(0)
   curses.echo()
   curses.endwin()
-
-<<<<<<< HEAD
-  print gpc
-
-'''
-stdscr = init_curses()
-
-mwin = curses.newwin(3, 100, 0, 0)
-file_win = curses.newwin(22, 80, 4, 0)
-
-while True:
-  stdscr.clear()
-  stdscr.refresh()
-  show_menu(mwin)
-  showFooter("s")
-  c = stdscr.getch()
-  if c == ord('x'):
-    break
-  elif c == ord('i'):
-    read_file(mwin, file_win, "i")
-    show_menu(mwin)
-    #showFooter("i")
-  elif c == ord('o'):
-    show_menu(mwin)
-    kill_received = False
-    #showFooter("o")
-    try:
-      t1 = Thread(target=runOften, args=("Ofthen Runs", file_win))
-      t2 = Thread(target=runLessOften, args=("runLessOften Runs", file_win))
-      t1.start()
-      t2.start()
-
-      read_file(mwin, file_win, "o")
-    except Exception, e:
-      print str(e)
-curses.nocbreak()
-stdscr.keypad(0)
-curses.echo()
-curses.endwin()
-
-print gpc
-  
-
-
-
-    #while not kill_received:
-    #  client(ip, port, "Hello World 1")
-    #  client(ip, port, "client 2")
-    #  time.sleep(1)
-
-'''
-=======
-  print gpc
->>>>>>> FETCH_HEAD
