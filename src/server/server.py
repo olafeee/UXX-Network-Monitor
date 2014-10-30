@@ -4,6 +4,7 @@ import socket
 import threading
 import SocketServer
 from struct import *
+import MySQLdb
 
 import curses
 import time
@@ -16,7 +17,18 @@ kill_received = True
 gpc = 0
 packetsCount = 0
 sock_error = 0
-''''''
+
+################################################
+#                Start Database                #
+################################################
+
+        # prepare a cursor object using cursor() method
+
+#now = datetime.datetime.now()
+#        logtime = now.strftime("%d-%m-%Y %H:%M")
+
+        # Open database connection
+  
 ################################################
 #                Start Server                  #
 ################################################
@@ -33,6 +45,7 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
         global packetsCount
         
         nump = len(pakketArray)
+        pakket = ''.join(pakketArray)
         del pakketArray[:]
         #num_client = threading.activeCount() - 1
         
@@ -42,7 +55,7 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
         cur_thread = threading.current_thread()
         response = "{}: {}".format(cur_thread.name, nump)
         try:
-          self.request.sendall(response)
+          self.request.sendall(pakket)
         except socket.error, e:
           global sock_error
           sock_error+=1
@@ -57,12 +70,10 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
 class ThreadedTCPServer(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
     pass
 
-
-
 def stopServer():
   kill_received = True
 
-def stoppings(server):
+def collect(server):
   global kill_received
   global pakketArray
   while not kill_received:
@@ -186,26 +197,27 @@ def stoppings(server):
           h_size = eth_length + iph_length + udph_length
           data_size = len(packet) - h_size
 
-          #get data from the packet
-          #data = packet[h_size:]
-
-          #print 'Data : ' + data
-
             #some other IP packet like IGMP
         else :
           print 'Protocol other than TCP/UDP/ICMP'
 
-        #print '_______________________________________'
-
-        # om loops tegen te gaan
-        # nu dport volgens mij straks sport
         pakketArray.append(pakket)
+      
+      try:
+        db = MySQLdb.connect("127.0.0.1","root","welkom","unix" )
+        sql = db.cursor()        # Prepare SQL query to INSERT a record into the database.
+        sql.execute("""INSERT INTO ETH(Dest_mac,Source_mac,Protocol)
+      VALUES (%s, %s, %s)""",(eth_addr(packet[0:6]),eth_addr(packet[6:12]),eth_protocol))
+        db.commit()
+      except MySQLdb.Error, e:
+        print "Error %d: %s" % (e.args[0],e.args[1])
+        sys.exit()   
+      finally:    
+        if db:    
+          db.close()
     
-    
-
-
 ################################################
-#                Start Curses                  #
+#                Interface                     #
 ################################################
 def init_curses():
     stdscr = curses.initscr()
@@ -223,12 +235,10 @@ def show_menu(win):
     win.clear()
     win.bkgd(curses.color_pair(2))
     win.box()
-    win.addstr(1, 2, "i:", curses.A_UNDERLINE)
-    win.addstr(1, 6, "messages")
-    win.addstr(1, 20, "o:", curses.A_UNDERLINE)
-    win.addstr(1, 24, "syslog")
-    win.addstr(1, 38, "x:", curses.A_UNDERLINE)
-    win.addstr(1, 42, "Exit")
+    win.addstr(1, 2, "o:", curses.A_UNDERLINE)
+    win.addstr(1, 6, "Start")
+    win.addstr(1, 20, "x:", curses.A_UNDERLINE)
+    win.addstr(1, 24, "Exit")
     win.refresh()
     showFooter("win")
 
@@ -252,16 +262,8 @@ def read_file(menu_win, file_win, st):
       if c == ord('x'):
           kill_received = True
           break
+          sys.exit()
     
-    '''
-    while True:
-
-      c = stdscr.getch()
-      if c == ord('x'):
-          kill_received = True
-          break
-
-'''
 def fileWin(packets):
   global file_win
   global packetsCount
@@ -306,10 +308,6 @@ if __name__ == "__main__":
     c = stdscr.getch()
     if c == ord('x'):
       break
-    elif c == ord('i'):
-      read_file(mwin, file_win, "i")
-      show_menu(mwin)
-      #showFooter("i")
     elif c == ord('o'):
       show_menu(mwin)
       kill_received = False
@@ -324,7 +322,7 @@ if __name__ == "__main__":
       # Start a thread with the server -- that thread will then start one
       # more thread for each request
       server_thread = threading.Thread(target=server.serve_forever)
-      t4 = threading.Thread(target=stoppings, args=(server,))
+      t4 = threading.Thread(target=collect, args=(server,))
 
       # Exit the server thread when the main thread terminates
       server_thread.daemon = True
@@ -340,6 +338,7 @@ if __name__ == "__main__":
   curses.echo()
   curses.endwin()
 
+<<<<<<< HEAD
   print gpc
 
 '''
@@ -389,3 +388,6 @@ print gpc
     #  time.sleep(1)
 
 '''
+=======
+  print gpc
+>>>>>>> FETCH_HEAD
