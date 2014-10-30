@@ -7,7 +7,7 @@ kill_received = False
 
 def client():
   ip = "127.0.0.1"
-  port = 57487
+  port = 12753
   global kill_received
   print "client start"
   sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
